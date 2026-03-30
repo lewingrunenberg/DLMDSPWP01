@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dlmdspwp01-project"
+version = "0.1.0"
+description = "Assignment-aligned implementation for the DLMDSPWP01 Programming with Python dataset project."
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "bokeh",
+  "pandas",
+  "SQLAlchemy",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+]
+
+[project.scripts]
+dlmdspwp01-project = "dlmdspwp01_project.main:main"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
