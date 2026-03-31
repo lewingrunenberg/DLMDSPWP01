@@ -82,7 +82,7 @@ After a run, typical outputs are:
 - `artifacts/db/assignment.db`
 - `artifacts/plots/training_vs_selected_ideal.html`
 - `artifacts/plots/mapped_test_points.html`
-- `artifacts/plots/mapping_distribution.html`
+- `artifacts/plots/accepted_deviation_by_ideal_function.html`
 - `artifacts/reports/selection_summary.csv`
 - `artifacts/reports/mapped_test_points.csv`
 - `artifacts/reports/mapping_counts_by_function.csv`
