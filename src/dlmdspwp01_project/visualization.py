@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bokeh.layouts import column, gridplot
+import pandas as pd
+from bokeh.layouts import gridplot
 from bokeh.models import ColumnDataSource, HoverTool
 from bokeh.palettes import Category10
 from bokeh.plotting import figure, output_file, save
@@ -35,7 +36,9 @@ class VisualizationBuilder:
                 training_dataset, ideal_dataset, selection_summary
             ),
             self.build_mapped_test_points_plot(ideal_dataset, selection_summary, mapping_summary),
-            self.build_mapping_distribution_plot(mapping_summary),
+            self.build_accepted_deviation_by_ideal_plot(
+                selection_summary, mapping_summary
+            ),
         ]
 
     def build_training_vs_selected_plot(
@@ -145,28 +148,113 @@ class VisualizationBuilder:
         save(plot)
         return output_path
 
-    def build_mapping_distribution_plot(
+    def build_accepted_deviation_by_ideal_plot(
         self,
+        selection_summary: SelectionSummary,
         mapping_summary: MappingSummary,
-        file_name: str = "mapping_distribution.html",
+        file_name: str = "accepted_deviation_by_ideal_function.html",
     ) -> Path:
-        """Create a compact bar chart of mapped-point counts per ideal function."""
+        threshold_by_ideal = {
+            pair.ideal_function_no: pair.mapping_threshold
+            for pair in selection_summary.selected_pairs
+        }
 
-        count_table = mapping_summary.counts_dataframe()
-        x_values = [str(value) for value in count_table["ideal_function_no"].tolist()]
-        y_values = count_table["mapped_count"].tolist()
+        points = mapping_summary.mapped_points
+        if not points:
+            plot = figure(
+                title="Distribution of accepted absolute deviations by selected ideal function",
+                x_axis_label="Ideal function number",
+                y_axis_label="Absolute deviation",
+                width=700,
+                height=400,
+                y_range=(0, 1),
+            )
+            output_path = self.output_directory / file_name
+            output_file(output_path)
+            save(plot)
+            return output_path
+
+        df = pd.DataFrame(
+            {
+                "ideal_function_no": [p.ideal_function_no for p in points],
+                "abs_deviation": [p.delta_y for p in points],
+            }
+        )
+        grouped = df.groupby("ideal_function_no", sort=True)["abs_deviation"]
+        stats = grouped.agg(
+            lower="min",
+            q1=lambda s: float(s.quantile(0.25)),
+            med="median",
+            q3=lambda s: float(s.quantile(0.75)),
+            upper="max",
+        ).reset_index()
+        n = len(stats)
+        x = list(range(n))
+        stats["x"] = x
+        stats["threshold"] = stats["ideal_function_no"].map(threshold_by_ideal).astype(float)
+
+        ymax_data = float(stats[["upper", "threshold"]].max().max())
+        ymax = ymax_data * 1.05 if ymax_data > 0 else 1.0
 
         plot = figure(
-            title="Mapped test points per ideal function",
+            title="Distribution of accepted absolute deviations by selected ideal function",
             x_axis_label="Ideal function number",
-            y_axis_label="Mapped count",
-            x_range=x_values,
+            y_axis_label="Absolute deviation",
+            x_range=(-0.5, n - 0.5),
+            y_range=(0, ymax),
             width=700,
             height=400,
         )
-        plot.vbar(x=x_values, top=y_values, width=0.8, color="#4c78a8")
+        plot.xaxis.ticker = x
+        ideal_labels = stats["ideal_function_no"].astype(int).tolist()
+        plot.xaxis.major_label_overrides = {i: str(ideal_labels[i]) for i in range(n)}
+
+        plot.segment(
+            x0=x,
+            y0=stats["lower"],
+            x1=x,
+            y1=stats["q1"],
+            line_color="black",
+            line_width=1,
+        )
+        plot.segment(
+            x0=x,
+            y0=stats["q3"],
+            x1=x,
+            y1=stats["upper"],
+            line_color="black",
+            line_width=1,
+        )
+        plot.vbar(
+            x=x,
+            width=0.45,
+            bottom=stats["q1"],
+            top=stats["q3"],
+            fill_color="white",
+            line_color="black",
+        )
+        xm = 0.22
+        plot.segment(
+            x0=[i - xm for i in x],
+            y0=stats["med"],
+            x1=[i + xm for i in x],
+            y1=stats["med"],
+            line_color="black",
+            line_width=2,
+        )
+        plot.segment(
+            x0=[i - xm for i in x],
+            y0=stats["threshold"],
+            x1=[i + xm for i in x],
+            y1=stats["threshold"],
+            line_color="#000000",
+            line_width=1.5,
+            line_dash="dashed",
+            legend_label="Mapping threshold",
+        )
+        plot.legend.location = "top_right"
 
         output_path = self.output_directory / file_name
         output_file(output_path)
-        save(column(plot))
+        save(plot)
         return output_path
